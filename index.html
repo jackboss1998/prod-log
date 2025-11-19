@@ -2,380 +2,123 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>生产报工登记</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>
-        /* 自定义颜色 */
-        .bg-secondary { background-color: #10B981; } /* 提交按钮颜色 */
-        .hover\:bg-secondary\/90:hover { background-color: #059669; }
-        .shadow-secondary\/30 { box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3), 0 2px 4px -2px rgba(16, 185, 129, 0.3); }
-        .bg-danger { background-color: #EF4444; } /* 危险按钮颜色 */
-        /* 输入框焦点样式 */
-        input:focus {
-            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.5);
-            border-color: #10B981;
-            outline: none;
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563EB', 
+                        secondary: '#10B981', 
+                        danger: '#EF4444',
+                        bg: '#F3F4F6'
+                    }
+                }
+            }
         }
+    </script>
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        input, select { font-size: 16px !important; }
+        .card-shadow { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+        .spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
-<body class="bg-gray-50 pb-20">
+<body class="bg-bg text-gray-800 font-sans min-h-screen pb-24">
 
-    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-xl hidden z-[100]">
-        <i id="toastIcon" class="fa fa-info-circle mr-2"></i> <span id="toastMsg">消息提示</span>
-    </div>
-    
-    <div class="max-w-md mx-auto p-4 bg-white shadow-lg rounded-lg mt-4">
-        <h1 class="text-2xl font-extrabold text-gray-800 mb-6 border-b pb-2">生产报工登记</h1>
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="bg-primary text-white p-1.5 rounded-lg"><i class="fa fa-cubes"></i></div>
+                <h1 class="font-bold text-lg tracking-tight text-gray-900">生产报工登记</h1>
+            </div>
+            <div class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">
+                <i class="fa fa-wifi"></i> SeaTable直连
+            </div>
+        </div>
+    </header>
+
+    <main class="p-4 max-w-md mx-auto space-y-4">
         
-        <script>
-            // ================== 配置区 - 请替换为你的飞书 API 信息 ==================
-            const CONFIG = {
-                // 飞书开发者平台获取的凭证
-                APP_ID: 'cli_a997daabaab0d00b',     // 替换为你自己的 App ID (图1)
-                APP_SECRET: '83smt2QEV3vToA91HnpHthKtZV5J5L2q', // 替换为你自己的 App Secret (图1)
-                
-                // 从 URL 中获取的表格 ID
-                BASE_TOKEN: 'GF3PwM5MIikft3kMIKNcbGf0nAb',  // 替换为你自己的 Base Token (多维表格ID)
-                TABLE_ID: 'tblyghxLsXt9GQ9m',      // 替换为你自己的 Table ID (工作表ID)
-                
-                // API 域名
-                API_DOMAIN: 'https://open.feishu.cn' 
-            };
-            // ===================================================================
-
-            // 全局变量，用于存储 Access Token，避免重复获取
-            let ACCESS_TOKEN = '';
-
-            // 1. 初始化和辅助函数
-            
-            // 初始化日期和缓存
-            const initDate = () => {
-                const today = new Date().toISOString().split('T')[0];
-                document.getElementById('date').value = today;
-            };
-
-            // 按钮状态重置
-            const resetBtn = (btn, originText) => {
-                setTimeout(() => {
-                    btn.disabled = false;
-                    btn.innerHTML = originText;
-                }, 500);
-            };
-
-            // 消息提示
-            const showToast = (msg, isError = false) => {
-                const toast = document.getElementById('toast');
-                const toastMsg = document.getElementById('toastMsg');
-                const toastIcon = document.getElementById('toastIcon');
-
-                toastMsg.textContent = msg;
-                if (isError) {
-                    toast.classList.remove('bg-gray-800');
-                    toast.classList.add('bg-danger');
-                    toastIcon.className = 'fa fa-times-circle mr-2';
-                } else {
-                    toast.classList.remove('bg-danger');
-                    toast.classList.add('bg-gray-800');
-                    toastIcon.className = 'fa fa-info-circle mr-2';
-                }
-                
-                toast.classList.remove('hidden');
-                setTimeout(() => {
-                    toast.classList.add('hidden');
-                }, 3000);
-            };
-
-            // 表单验证
-            const validateForm = () => {
-                const requiredFields = ['date', 'group', 'team', 'taskId', 'product', 'quantity', 'unitBase'];
-                for (const id of requiredFields) {
-                    if (!document.getElementById(id).value.trim()) {
-                        showToast(`⚠️ 请填写所有必填信息！`, true);
-                        return false;
-                    }
-                }
-                if (!document.querySelector('input[name="shift"]:checked')) {
-                    showToast(`⚠️ 请选择班次！`, true);
-                    return false;
-                }
-                
-                // 检查至少有一行出勤
-                const attendanceRows = document.querySelectorAll('#attendanceList > div');
-                let hasAttendance = false;
-                attendanceRows.forEach(row => {
-                    const name = row.querySelector('input[name="staffName"]').value.trim();
-                    const hours = row.querySelector('input[name="staffHours"]').value.trim();
-                    if (name && hours) {
-                        hasAttendance = true;
-                    }
-                });
-
-                if (!hasAttendance) {
-                    showToast(`⚠️ 请填写至少一个出勤人员及工时！`, true);
-                    return false;
-                }
-
-                return true;
-            };
-
-            // 动态添加出勤行
-            const addAttendanceRow = (isInitial = false) => {
-                const list = document.getElementById('attendanceList');
-                // 只有初始化时或现有行都填满时才添加新行
-                if (!isInitial) {
-                    const lastRow = list.lastElementChild;
-                    const lastRowName = lastRow.querySelector('input[name="staffName"]').value.trim();
-                    const lastRowHours = lastRow.querySelector('input[name="staffHours"]').value.trim();
-                    if (!lastRowName && !lastRowHours) return; // 如果最后一行是空的，不添加
-                }
-
-                const newRow = document.createElement('div');
-                newRow.className = 'flex space-x-2 mb-2 items-center';
-                newRow.innerHTML = `
-                    <div class="flex-grow">
-                        <input type="text" name="staffName" placeholder="人员姓名" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-secondary focus:border-secondary">
+        <div class="bg-white rounded-xl p-4 card-shadow">
+            <div class="flex justify-between items-center mb-3 border-b pb-2">
+                <h3 class="font-bold text-gray-700 flex items-center"><i class="fa fa-id-card-o text-primary mr-2"></i> 班组信息</h3>
+                <span class="text-xs text-gray-400">自动记忆</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="col-span-2">
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">日期</label>
+                    <input type="date" id="date" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-primary transition-colors">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">组别</label>
+                    <input type="text" id="group" placeholder="如: 伴侣组" class="save-local w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-primary">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">小组</label>
+                    <input type="text" id="team" placeholder="如: 开条" class="save-local w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-primary">
+                </div>
+                <div class="col-span-2">
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">班次</label>
+                    <div class="flex gap-2">
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="shift" value="白班" class="save-local peer sr-only">
+                            <div class="text-center py-2 border rounded-lg peer-checked:bg-blue-50 peer-checked:border-primary peer-checked:text-primary transition-all">🌞 白班</div>
+                        </label>
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="shift" value="夜班" class="save-local peer sr-only">
+                            <div class="text-center py-2 border rounded-lg peer-checked:bg-blue-900 peer-checked:border-blue-900 peer-checked:text-white transition-all">🌙 夜班</div>
+                        </label>
                     </div>
-                    <div class="w-20">
-                        <input type="number" name="staffHours" placeholder="工时" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-secondary focus:border-secondary">
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl p-4 card-shadow">
+            <h3 class="font-bold text-gray-700 mb-3 pb-2 border-b flex items-center"><i class="fa fa-tasks text-primary mr-2"></i> 任务详情</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">任务单号 <span class="text-red-500">*</span></label>
+                    <div class="relative">
+                        <input type="text" id="taskId" placeholder="扫描或输入单号" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 pl-9 focus:border-primary uppercase">
+                        <i class="fa fa-barcode absolute left-3 top-3 text-gray-400"></i>
                     </div>
-                    <button type="button" class="remove-row text-red-500 hover:text-red-700 p-2 text-lg" aria-label="移除此行">
-                        <i class="fa fa-minus-circle"></i>
-                    </button>
-                `;
-                list.appendChild(newRow);
-
-                // 移除按钮事件
-                newRow.querySelector('.remove-row').addEventListener('click', (e) => {
-                    if (list.children.length > 1) { // 至少保留一行
-                        list.removeChild(newRow);
-                    } else {
-                        showToast('⚠️ 至少需要保留一行出勤记录！', true);
-                    }
-                });
-            };
-
-            // ----------------- 飞书 API 认证函数 -----------------
-
-            // 获取飞书的 tenant_access_token
-            async function getAccessToken() {
-                if (ACCESS_TOKEN) return ACCESS_TOKEN; // 如果已存在，直接返回
-
-                const url = `${CONFIG.API_DOMAIN}/open-apis/auth/v3/tenant_access_token/internal`;
-                
-                try {
-                    const res = await fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            app_id: CONFIG.APP_ID,
-                            app_secret: CONFIG.APP_SECRET
-                        })
-                    });
-
-                    const data = await res.json();
-                    
-                    if (data.code === 0 && data.tenant_access_token) {
-                        ACCESS_TOKEN = data.tenant_access_token;
-                        return ACCESS_TOKEN;
-                    } else {
-                        throw new Error(data.msg || '飞书认证失败');
-                    }
-                } catch (e) {
-                    console.error('获取 Access Token 失败:', e.message);
-                    throw new Error('认证失败: 请检查 App ID/Secret 或权限设置。');
-                }
-            }
-
-            // ----------------- 提交数据到飞书多维表格 -----------------
-
-            async function handleSubmit(clearAll) {
-                const btn = clearAll ? document.getElementById('submitClear') : document.getElementById('submitContinue');
-                const originText = btn.innerHTML;
-                const list = document.getElementById('attendanceList');
-                
-                if (!validateForm()) return;
-
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa fa-floppy-o"></i> 提交中...';
-
-                try {
-                    // 1. 获取 Access Token
-                    const accessToken = await getAccessToken();
-
-                    // 2. 收集数据
-                    const masterData = {
-                        // 飞书要求字段名称使用实际列名
-                        '日期': document.getElementById('date').value, 
-                        '组别': document.getElementById('group').value,
-                        '小组': document.getElementById('team').value,
-                        '班次': document.querySelector('input[name="shift"]:checked')?.value || '',
-                        '任务单号': document.getElementById('taskId').value.toUpperCase(),
-                        '品名': document.getElementById('product').value,
-                        '数量': parseFloat(document.getElementById('quantity').value) || 0,
-                        '单基数': parseFloat(document.getElementById('unitBase').value) || 0
-                    };
-
-                    const records = [];
-                    document.querySelectorAll('#attendanceList > div').forEach(row => {
-                        const name = row.querySelector('input[name="staffName"]').value.trim();
-                        const hours = row.querySelector('input[name="staffHours"]').value;
-                        
-                        if(name && hours) {
-                            records.push({
-                                // 飞书 API 要求使用 fields 对象
-                                fields: {
-                                    ...masterData,
-                                    '出勤人员': name,
-                                    '出勤工时': parseFloat(hours) || 0
-                                }
-                            });
-                        }
-                    });
-                    
-                    if (records.length === 0) throw new Error('没有有效的出勤记录可以提交。');
-
-                    // 3. 构建 API 请求
-                    const url = `${CONFIG.API_DOMAIN}/open-apis/bitable/v1/apps/${CONFIG.BASE_TOKEN}/tables/${CONFIG.TABLE_ID}/records/batch_create`;
-                    
-                    const res = await fetch(url, {
-                        method: 'POST',
-                        headers: { 
-                            'Authorization': 'Bearer ' + accessToken, // 使用 Access Token
-                            'Content-Type': 'application/json' 
-                        },
-                        body: JSON.stringify({
-                            records: records
-                        })
-                    });
-
-                    const data = await res.json();
-                    
-                    if (data.code === 0) {
-                        showToast(`✅ 提交成功！已保存 ${data.data.total} 条记录到飞书！`);
-                        
-                        // 成功后的 UI 处理
-                        document.querySelectorAll('input[name="staffName"], input[name="staffHours"]').forEach(input => input.value = ''); 
-                        while(list.children.length > 1) list.removeChild(list.lastChild); // 只保留一行
-                        
-                        if(clearAll) {
-                            // 清空主表信息
-                            document.getElementById('taskId').value = '';
-                            document.getElementById('product').value = '';
-                            document.getElementById('quantity').value = '';
-                            document.getElementById('unitBase').value = '';
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }
-                    } else {
-                        // 提交失败
-                        throw new Error(`飞书 API 错误: Code ${data.code} / ${data.msg}`);
-                    }
-                } catch (e) {
-                    alert('提交失败: ' + e.message + '\n请检查网络或飞书配置。');
-                    showToast(`❌ 提交失败: ${e.message}`, true);
-                } finally {
-                    resetBtn(btn, originText);
-                }
-            }
-
-
-            // 4. 事件监听和初始化
-            document.addEventListener('DOMContentLoaded', () => {
-                initDate();
-                addAttendanceRow(true); // 默认添加一行
-
-                // 提交按钮事件
-                document.getElementById('submitContinue').addEventListener('click', () => handleSubmit(false));
-                document.getElementById('submitClear').addEventListener('click', () => handleSubmit(true));
-                
-                // 添加行按钮事件
-                document.getElementById('addRowBtn').addEventListener('click', () => addAttendanceRow());
-
-                // 预加载缓存组别信息的逻辑可以根据你的需求保留或删除
-                // loadCachedData(); 
-            });
-
-        </script>
-
-
-        <section class="space-y-4 mb-6">
-            <h2 class="text-lg font-semibold text-gray-700 mb-2">报工信息</h2>
-            
-            <div>
-                <label for="date" class="block text-sm font-medium text-gray-700 mb-1">日期 *</label>
-                <input type="date" id="date" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label for="group" class="block text-sm font-medium text-gray-700 mb-1">组别 *</label>
-                    <select id="group" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-white">
-                        <option value="">请选择</option>
-                        <option value="成品">成品</option>
-                        <option value="半成品">半成品</option>
-                    </select>
                 </div>
                 <div>
-                    <label for="team" class="block text-sm font-medium text-gray-700 mb-1">小组 *</label>
-                    <select id="team" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-white">
-                        <option value="">请选择</option>
-                        <option value="开条">开条</option>
-                        <option value="缝纫">缝纫</option>
-                        </select>
+                    <label class="text-xs font-semibold text-gray-500 mb-1 block">品名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="product" placeholder="输入产品名称" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-primary">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500 mb-1 block">任务数量</label>
+                        <input type="number" id="quantity" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-primary">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500 mb-1 block">单基数</label>
+                        <input type="number" id="unitBase" placeholder="0.00" step="0.01" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-primary">
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">班次 *</label>
-                <div class="flex space-x-4">
-                    <label class="inline-flex items-center">
-                        <input type="radio" name="shift" value="白班" class="form-radio text-secondary">
-                        <span class="ml-2 text-gray-700">白班</span>
-                    </label>
-                    <label class="inline-flex items-center">
-                        <input type="radio" name="shift" value="夜班" class="form-radio text-secondary">
-                        <span class="ml-2 text-gray-700">夜班</span>
-                    </label>
-                </div>
+        <div class="bg-white rounded-xl p-4 card-shadow border-l-4 border-secondary">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-bold text-gray-700"><i class="fa fa-users text-secondary mr-2"></i> 出勤录入</h3>
+                <button type="button" id="addRowBtn" class="text-xs bg-secondary/10 text-secondary px-2 py-1 rounded font-medium active:bg-secondary/20">
+                    <i class="fa fa-plus"></i> 加一行
+                </button>
             </div>
-        </section>
+            <div id="attendanceList" class="space-y-3"></div>
+        </div>
 
-        <section class="space-y-4 mb-6 pt-4 border-t">
-            <h2 class="text-lg font-semibold text-gray-700 mb-2">任务详情</h2>
-            
-            <div>
-                <label for="taskId" class="block text-sm font-medium text-gray-700 mb-1">任务单号 *</label>
-                <input type="text" id="taskId" placeholder="请输入任务单号" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm uppercase">
-            </div>
-            
-            <div>
-                <label for="product" class="block text-sm font-medium text-gray-700 mb-1">品名 *</label>
-                <input type="text" id="product" placeholder="请输入品名" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label for="quantity" class="block text-sm font-medium text-gray-700 mb-1">任务数量 *</label>
-                    <input type="number" id="quantity" placeholder="数量" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
-                </div>
-                <div>
-                    <label for="unitBase" class="block text-sm font-medium text-gray-700 mb-1">单基数 *</label>
-                    <input type="number" id="unitBase" placeholder="基数" class="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm">
-                </div>
-            </div>
-        </section>
-
-        <section class="space-y-4 mb-6 pt-4 border-t">
-            <h2 class="text-lg font-semibold text-gray-700 mb-2">出勤录入</h2>
-            <div id="attendanceList">
-                </div>
-            <button type="button" id="addRowBtn" class="w-full py-2 border border-dashed border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 transition-colors">
-                <i class="fa fa-plus-circle mr-2"></i> 再加一行
-            </button>
-        </section>
-        
-    </div>
+    </main>
 
     <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 px-4 shadow-lg z-50 backdrop-blur-md bg-opacity-95">
         <div class="max-w-md mx-auto grid grid-cols-5 gap-2">
@@ -388,5 +131,209 @@
             </button>
         </div>
     </div>
+
+    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full shadow-xl text-sm opacity-0 transition-opacity z-[100] pointer-events-none flex items-center hidden">
+        <i id="toastIcon" class="fa fa-info-circle mr-2"></i> <span id="toastMsg">消息提示</span>
+    </div>
+
+    <script>
+        // ================== 核心配置区 ==================
+        const CONFIG = {
+            // 你的 SeaTable API Token (已为你填好)
+            TOKEN: 'af509801d566b9921b8a4efb7becd9c0d971dc72', 
+            // 你的 表格标签名称 (已确认)
+            TABLE_NAME: '工作表1' 
+        };
+        // ==============================================
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            initDate();
+            loadCachedData();
+            addAttendanceRow(true);
+        });
+
+        // 1. 日期初始化
+        function initDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('date').value = today;
+        }
+
+        // 2. 缓存加载 (记忆班组信息)
+        function loadCachedData() {
+            document.querySelectorAll('.save-local').forEach(input => {
+                const key = 'PROD_SYS_' + (input.id || input.name);
+                const val = localStorage.getItem(key);
+                if (val) {
+                    if(input.type === 'radio') {
+                        if(input.value === val) input.checked = true;
+                    } else {
+                        input.value = val;
+                    }
+                }
+                input.addEventListener('change', (e) => {
+                    localStorage.setItem('PROD_SYS_' + (e.target.id || e.target.name), e.target.value);
+                });
+            });
+        }
+
+        // 3. 添加出勤行
+        const list = document.getElementById('attendanceList');
+        document.getElementById('addRowBtn').addEventListener('click', () => addAttendanceRow());
+
+        function addAttendanceRow(isFirst = false) {
+            const row = document.createElement('div');
+            row.className = 'grid grid-cols-7 gap-2 items-center animate-fadeIn';
+            row.innerHTML = `
+                <div class="col-span-3">
+                    <input type="text" name="staffName" placeholder="姓名" class="w-full bg-gray-50 border border-gray-200 rounded px-2 py-2 text-sm focus:border-secondary focus:ring-1 focus:ring-secondary focus:outline-none">
+                </div>
+                <div class="col-span-3 relative">
+                    <input type="number" name="staffHours" placeholder="工时" step="0.5" class="w-full bg-gray-50 border border-gray-200 rounded px-2 py-2 text-sm focus:border-secondary focus:ring-1 focus:ring-secondary focus:outline-none">
+                </div>
+                <div class="col-span-1 text-center">
+                    ${!isFirst ? '<button type="button" onclick="this.parentElement.parentElement.remove()" class="text-gray-400 hover:text-danger p-2"><i class="fa fa-minus-circle text-lg"></i></button>' : '<i class="fa fa-user text-gray-300"></i>'}
+                </div>
+            `;
+            list.appendChild(row);
+        }
+
+        // 4. 核心提交逻辑 (修复版)
+        document.getElementById('submitContinue').addEventListener('click', () => handleSubmit(false));
+        document.getElementById('submitClear').addEventListener('click', () => handleSubmit(true));
+
+        // 动态获取 SeaTable 服务器地址 (解决 404 的关键)
+        async function getDtableInfo() {
+            const url = 'https://cloud.seatable.cn/api/v2.1/dtable/app-access-token/';
+            const res = await fetch(url, {
+                headers: { 'Authorization': 'Token ' + CONFIG.TOKEN }
+            });
+            
+            if (!res.ok) throw new Error('认证失败：无法连接 SeaTable，请检查 Token');
+            return await res.json();
+        }
+
+        async function handleSubmit(clearAll) {
+            const btn = clearAll ? document.getElementById('submitClear') : document.getElementById('submitContinue');
+            const originText = btn.innerHTML;
+
+            // 校验
+            if(!validateForm()) return;
+
+            // 锁定按钮
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa fa-circle-o-notch spinner"></i> 连接中...';
+
+            try {
+                // 第一步：获取动态服务器地址
+                const authData = await getDtableInfo();
+                const { dtable_uuid, dtable_server, access_token } = authData;
+
+                btn.innerHTML = '<i class="fa fa-upload"></i> 上传中...';
+
+                // 第二步：收集数据
+                const commonData = {
+                    '日期': document.getElementById('date').value,
+                    '组别': document.getElementById('group').value,
+                    '小组': document.getElementById('team').value,
+                    '班次': document.querySelector('input[name="shift"]:checked')?.value,
+                    '任务单号': document.getElementById('taskId').value.toUpperCase(),
+                    '品名': document.getElementById('product').value,
+                    '数量': Number(document.getElementById('quantity').value) || 0,
+                    '单基数': Number(document.getElementById('unitBase').value) || 0
+                };
+
+                const rows = [];
+                document.querySelectorAll('#attendanceList > div').forEach(row => {
+                    const name = row.querySelector('input[name="staffName"]').value.trim();
+                    const hours = Number(row.querySelector('input[name="staffHours"]').value);
+                    if (name) {
+                        rows.push({
+                            ...commonData,
+                            '出勤人员': name,
+                            '出勤工时': hours
+                        });
+                    }
+                });
+
+                if (rows.length === 0) throw new Error('请至少录入一个有效出勤人员');
+
+                // 第三步：使用动态地址提交
+                // 注意：这里使用的是 dtable_server 而不是 cloud.seatable.cn
+                const submitUrl = `${dtable_server}/api/v1/dtables/${dtable_uuid}/batch-append-rows/`;
+                
+                const res = await fetch(submitUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Token ' + access_token, // 使用临时 Token
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        table_name: CONFIG.TABLE_NAME,
+                        rows: rows
+                    })
+                });
+
+                if (res.ok) {
+                    showToast(`✅ 提交成功！已保存 ${rows.length} 条记录`);
+                    
+                    // 成功后重置
+                    document.querySelectorAll('input[name="staffName"], input[name="staffHours"]').forEach(input => input.value = '');
+                    const list = document.getElementById('attendanceList');
+                    while(list.children.length > 1) list.removeChild(list.lastChild);
+
+                    if (clearAll) {
+                        document.getElementById('taskId').value = '';
+                        document.getElementById('product').value = '';
+                        document.getElementById('quantity').value = '';
+                        document.getElementById('unitBase').value = '';
+                        window.scrollTo(0, 0);
+                    }
+                } else {
+                    const err = await res.json();
+                    throw new Error(err.error_msg || '服务器拒绝写入');
+                }
+
+            } catch (error) {
+                console.error(error);
+                alert('提交失败: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originText;
+            }
+        }
+
+        function validateForm() {
+            const ids = ['date', 'group', 'team', 'taskId', 'product'];
+            for (let id of ids) {
+                if (!document.getElementById(id).value) {
+                    showToast('⚠️ 请填写所有必填项 *', true);
+                    return false;
+                }
+            }
+            if (!document.querySelector('input[name="shift"]:checked')) {
+                showToast('⚠️ 请选择班次', true);
+                return false;
+            }
+            return true;
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMsg').innerText = msg;
+            const icon = document.getElementById('toastIcon');
+            
+            if(isError) {
+                toast.classList.remove('bg-gray-800'); toast.classList.add('bg-danger');
+                icon.className = 'fa fa-times-circle mr-2';
+            } else {
+                toast.classList.remove('bg-danger'); toast.classList.add('bg-gray-800');
+                icon.className = 'fa fa-info-circle mr-2';
+            }
+            
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 2000);
+        }
+    </script>
 </body>
 </html>
