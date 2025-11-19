@@ -70,21 +70,22 @@
         <div class="bg-white rounded-xl p-4 card-shadow border-l-4 border-secondary">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="font-bold text-gray-700">出勤录入</h3>
-                <button id="addRowBtn" class="text-xs bg-green-50 text-green-600 px-2 py-1 rounded border border-green-200">+ 加一行</button>
+                <button id="addRowBtn" class="text-xs bg-green-50 text-green-600 px-2 py-1 rounded border border-green-200" type="button">+ 加一行</button>
             </div>
-            <div id="attendanceList" class="space-y-2"></div>
+            <div id="attendanceList" class="space-y-2">
+                </div>
         </div>
     </main>
 
     <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 px-4 shadow-lg z-50 space-y-3">
-        <button id="submitBtn" class="w-full bg-secondary text-white rounded-lg py-3 font-bold shadow-lg active:scale-95 transition-transform flex justify-center items-center">
+        <button id="submitBtn" class="w-full bg-secondary text-white rounded-lg py-3 font-bold shadow-lg active:scale-95 transition-transform flex justify-center items-center" type="button">
             <i class="fa fa-cloud-upload mr-2"></i> 提交保存
         </button>
         
         <div id="adminPanel" class="hidden pt-2 border-t bg-gray-50 p-2 rounded">
             <div class="flex gap-2 items-center">
                 <input type="password" id="adminPwd" placeholder="输入密码: 888" class="flex-1 border rounded px-2 py-1 text-sm">
-                <button id="exportExcelBtn" class="bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold whitespace-nowrap">
+                <button id="exportExcelBtn" class="bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold whitespace-nowrap" type="button">
                     <i class="fa fa-download"></i> 下载Excel
                 </button>
             </div>
@@ -106,20 +107,41 @@
         const EXPORT_PWD      = '888';                  // 管理员导出密码
         
         // 初始化 Bmob
-        Bmob.initialize(BMOB_SECRET_KEY, BMOB_API_KEY);
+        try {
+            Bmob.initialize(BMOB_SECRET_KEY, BMOB_API_KEY);
+        } catch (e) {
+            console.error("Bmob 初始化失败:", e);
+            // 这里不会用 showToast 因为 DOM 可能还没准备好
+        }
         // =======================================================
 
+        // 统一的初始化函数，确保所有元素加载完毕后再执行
         document.addEventListener('DOMContentLoaded', () => {
-            initDate();
-            loadCachedData();
-            addAttendanceRow(true); 
-            
-            // 按钮事件绑定
-            document.getElementById('addRowBtn').addEventListener('click', () => addAttendanceRow());
-            document.getElementById('submitBtn').addEventListener('click', handleSubmit);
-            document.getElementById('adminBtn').addEventListener('click', toggleAdmin);
-            document.getElementById('exportExcelBtn').addEventListener('click', handleExport);
+            initApp();
         });
+
+        function initApp() {
+            try {
+                initDate();
+                loadCachedData();
+                addAttendanceRow(true); // 默认添加一行，解决问题1
+                
+                // 按钮事件绑定 (解决问题2)
+                document.getElementById('addRowBtn').addEventListener('click', addAttendanceRow);
+                document.getElementById('submitBtn').addEventListener('click', handleSubmit);
+                document.getElementById('adminBtn').addEventListener('click', toggleAdmin);
+                document.getElementById('exportExcelBtn').addEventListener('click', handleExport);
+                
+                // 确保管理员面板可以打开
+                console.log("应用初始化成功，事件已绑定。");
+                
+            } catch(e) {
+                // 如果初始化失败，显示更明显的错误提示
+                document.getElementById('toast').classList.remove('hidden');
+                document.getElementById('toast').innerHTML = '<i class="fa fa-bug mr-2"></i> 初始化失败，请检查浏览器控制台错误。';
+                console.error("初始化过程中发生错误:", e);
+            }
+        }
 
         // 1. 基础功能
         function initDate() {
@@ -129,18 +151,25 @@
         function loadCachedData() {
             document.querySelectorAll('.save-local').forEach(input => {
                 const val = localStorage.getItem('PROD_' + (input.id || input.name));
-                if (val) input.type === 'radio' ? (input.value === val && (input.checked = true)) : input.value = val;
+                if (val) {
+                    if (input.type === 'radio') {
+                        if (input.value === val) input.checked = true;
+                    } else {
+                        input.value = val;
+                    }
+                }
                 input.addEventListener('change', e => localStorage.setItem('PROD_' + (e.target.id || e.target.name), e.target.value));
             });
         }
-
+        
+        // 解决问题1的关键函数
         function addAttendanceRow(isFirst = false) {
             const row = document.createElement('div');
             row.className = 'flex gap-2 items-center animate-fadeIn';
             row.innerHTML = `
-                <input type="text" name="staffName" placeholder="姓名" class="flex-1 border rounded p-2 text-sm bg-gray-50 focus:bg-white">
-                <input type="number" name="staffHours" placeholder="工时" class="w-20 border rounded p-2 text-sm bg-gray-50 focus:bg-white">
-                ${!isFirst ? '<button onclick="this.parentElement.remove()" class="text-red-400 p-2"><i class="fa fa-minus-circle"></i></button>' : '<div class="w-8"></div>'}
+                <input type="text" name="staffName" placeholder="姓名" class="flex-1 border rounded p-2 text-sm bg-gray-50 focus:bg-white" required>
+                <input type="number" name="staffHours" placeholder="工时" class="w-20 border rounded p-2 text-sm bg-gray-50 focus:bg-white" required>
+                ${!isFirst ? '<button onclick="this.parentElement.remove()" class="text-red-400 p-2" type="button"><i class="fa fa-minus-circle"></i></button>' : '<div class="w-8"></div>'}
             `;
             document.getElementById('attendanceList').appendChild(row);
         }
@@ -173,41 +202,41 @@
                 const name = row.querySelector('input[name="staffName"]').value.trim();
                 const hours = Number(row.querySelector('input[name="staffHours"]').value);
                 
-                if (name) {
+                if (name && hours > 0) { // 确保姓名和工时大于0
                     hasStaff = true;
                     const query = Bmob.Query(TABLE_NAME);
-                    for (let key in commonData) query.set(key, commonData[key]); // 复制公共信息
-                    query.set('staffName', name); // 存入姓名
-                    query.set('staffHours', hours); // 存入工时
+                    for (let key in commonData) query.set(key, commonData[key]);
+                    query.set('staffName', name);
+                    query.set('staffHours', hours);
                     queryArray.push(query);
                 }
             });
 
-            if (!hasStaff) return showToast('⚠️ 至少录入一个出勤人员', true);
+            if (!hasStaff) return showToast('⚠️ 至少录入一个出勤人员及大于0的工时', true);
 
             // 开始提交
             btn.disabled = true;
             btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 云端保存中...';
 
             try {
-                // 并发上传所有行
                 const promises = queryArray.map(q => q.save());
                 await Promise.all(promises);
 
                 showToast('✅ 提交成功！数据已存入云端');
                 
-                // 清空部分数据
+                // 清空重置
                 document.getElementById('taskId').value = '';
                 document.getElementById('product').value = '';
                 document.getElementById('quantity').value = '';
+                document.getElementById('unitBase').value = '';
                 // 重置人员列表
-                document.querySelectorAll('input[name="staffName"], input[name="staffHours"]').forEach(i => i.value = '');
                 const list = document.getElementById('attendanceList');
-                while(list.children.length > 1) list.removeChild(list.lastChild);
+                list.innerHTML = ''; // 清空所有行
+                addAttendanceRow(true); // 重新添加一行
 
             } catch (e) {
-                console.error(e);
-                alert('提交出错: ' + (e.error || JSON.stringify(e)));
+                console.error("Bmob 提交失败:", e);
+                showToast(`❌ 提交出错: ${e.error || e.message || '未知错误'}`, true);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
@@ -231,7 +260,6 @@
             btn.innerHTML = '下载中...';
 
             try {
-                // 拉取最近 1000 条数据
                 const query = Bmob.Query(TABLE_NAME);
                 query.limit(1000);
                 query.order("-createdAt");
@@ -254,7 +282,6 @@
                     "工时": item.staffHours
                 }));
 
-                // 生成 Excel
                 const ws = XLSX.utils.json_to_sheet(excelData);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "报工记录");
@@ -265,7 +292,7 @@
                 showToast('✅ Excel 已下载');
 
             } catch (e) {
-                alert('导出失败: ' + (e.error || e.message));
+                showToast(`❌ 导出失败: ${e.message || '未知错误'}`, true);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = oldText;
@@ -278,11 +305,13 @@
             const i = document.getElementById('toastIcon');
             document.getElementById('toastMsg').innerText = msg;
             
+            t.classList.remove('bg-danger', 'bg-gray-800', 'hidden');
+
             if(isError) {
-                t.classList.remove('bg-gray-800'); t.classList.add('bg-danger');
+                t.classList.add('bg-danger');
                 i.className = 'fa fa-times-circle mr-2';
             } else {
-                t.classList.remove('bg-danger'); t.classList.add('bg-gray-800');
+                t.classList.add('bg-gray-800');
                 i.className = 'fa fa-check-circle mr-2';
             }
             
