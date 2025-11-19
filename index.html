@@ -7,17 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     
+    <script src="https://unpkg.com/bmob.js-sdk-v2@2.5.1/dist/Bmob-2.5.1.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    
     <script>
         tailwind.config = {
             theme: {
-                extend: {
-                    colors: {
-                        primary: '#2563EB', 
-                        secondary: '#10B981', 
-                        danger: '#EF4444',
-                        bg: '#F3F4F6'
-                    }
-                }
+                extend: { colors: { primary: '#2563EB', secondary: '#10B981', danger: '#EF4444', bg: '#F3F4F6' } }
             }
         }
     </script>
@@ -25,8 +21,6 @@
         body { -webkit-tap-highlight-color: transparent; }
         input, select { font-size: 16px !important; }
         .card-shadow { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
-        .spinner { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
@@ -35,13 +29,8 @@
 
     <header class="bg-white shadow-sm sticky top-0 z-50">
         <div class="px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center gap-2">
-                <div class="bg-primary text-white p-1.5 rounded-lg"><i class="fa fa-cubes"></i></div>
-                <h1 class="font-bold text-lg tracking-tight text-gray-900">生产报工登记</h1>
-            </div>
-            <div class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">
-                <i class="fa fa-wifi"></i> SeaTable直连
-            </div>
+            <h1 class="font-bold text-lg text-primary"><i class="fa fa-industry"></i> 生产报工</h1>
+            <button id="adminBtn" class="text-xs text-gray-400 border rounded px-2 py-1">管理员导出</button>
         </div>
     </header>
 
@@ -54,285 +43,251 @@
             </div>
             <div class="grid grid-cols-2 gap-3">
                 <div class="col-span-2">
-                    <label class="text-xs font-semibold text-gray-500 mb-1 block">日期</label>
-                    <input type="date" id="date" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-primary transition-colors">
+                    <label class="text-xs text-gray-500 block">日期</label>
+                    <input type="date" id="date" class="w-full border rounded p-2 bg-gray-50">
                 </div>
-                <div>
-                    <label class="text-xs font-semibold text-gray-500 mb-1 block">组别</label>
-                    <input type="text" id="group" placeholder="如: 伴侣组" class="save-local w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-primary">
-                </div>
-                <div>
-                    <label class="text-xs font-semibold text-gray-500 mb-1 block">小组</label>
-                    <input type="text" id="team" placeholder="如: 开条" class="save-local w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-primary">
-                </div>
-                <div class="col-span-2">
-                    <label class="text-xs font-semibold text-gray-500 mb-1 block">班次</label>
-                    <div class="flex gap-2">
-                        <label class="flex-1 cursor-pointer">
-                            <input type="radio" name="shift" value="白班" class="save-local peer sr-only">
-                            <div class="text-center py-2 border rounded-lg peer-checked:bg-blue-50 peer-checked:border-primary peer-checked:text-primary transition-all">🌞 白班</div>
-                        </label>
-                        <label class="flex-1 cursor-pointer">
-                            <input type="radio" name="shift" value="夜班" class="save-local peer sr-only">
-                            <div class="text-center py-2 border rounded-lg peer-checked:bg-blue-900 peer-checked:border-blue-900 peer-checked:text-white transition-all">🌙 夜班</div>
-                        </label>
-                    </div>
+                <div><label class="text-xs text-gray-500">组别</label><input type="text" id="group" class="save-local w-full border rounded p-2" placeholder="如: 成品"></div>
+                <div><label class="text-xs text-gray-500">小组</label><input type="text" id="team" class="save-local w-full border rounded p-2" placeholder="如: 开条"></div>
+                <div class="col-span-2 flex gap-2">
+                    <label class="flex-1 cursor-pointer"><input type="radio" name="shift" value="白班" class="save-local peer hidden"><div class="text-center py-2 border rounded peer-checked:bg-blue-50 peer-checked:text-primary border-gray-200">🌞 白班</div></label>
+                    <label class="flex-1 cursor-pointer"><input type="radio" name="shift" value="夜班" class="save-local peer hidden"><div class="text-center py-2 border rounded peer-checked:bg-blue-900 peer-checked:text-white border-gray-200">🌙 夜班</div></label>
                 </div>
             </div>
         </div>
 
         <div class="bg-white rounded-xl p-4 card-shadow">
-            <h3 class="font-bold text-gray-700 mb-3 pb-2 border-b flex items-center"><i class="fa fa-tasks text-primary mr-2"></i> 任务详情</h3>
+            <h3 class="font-bold text-gray-700 mb-3 border-b pb-2">任务详情</h3>
             <div class="space-y-3">
-                <div>
-                    <label class="text-xs font-semibold text-gray-500 mb-1 block">任务单号 <span class="text-red-500">*</span></label>
-                    <div class="relative">
-                        <input type="text" id="taskId" placeholder="扫描或输入单号" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 pl-9 focus:border-primary uppercase">
-                        <i class="fa fa-barcode absolute left-3 top-3 text-gray-400"></i>
-                    </div>
-                </div>
-                <div>
-                    <label class="text-xs font-semibold text-gray-500 mb-1 block">品名 <span class="text-red-500">*</span></label>
-                    <input type="text" id="product" placeholder="输入产品名称" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-primary">
-                </div>
+                <div><label class="text-xs text-gray-500">任务单号 *</label><input type="text" id="taskId" class="w-full border rounded p-2 uppercase" placeholder="输入单号"></div>
+                <div><label class="text-xs text-gray-500">品名 *</label><input type="text" id="product" class="w-full border rounded p-2" placeholder="输入品名"></div>
                 <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="text-xs font-semibold text-gray-500 mb-1 block">任务数量</label>
-                        <input type="number" id="quantity" placeholder="0" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-primary">
-                    </div>
-                    <div>
-                        <label class="text-xs font-semibold text-gray-500 mb-1 block">单基数</label>
-                        <input type="number" id="unitBase" placeholder="0.00" step="0.01" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:border-primary">
-                    </div>
+                    <div><label class="text-xs text-gray-500">数量</label><input type="number" id="quantity" class="w-full border rounded p-2" placeholder="0"></div>
+                    <div><label class="text-xs text-gray-500">单基数</label><input type="number" id="unitBase" class="w-full border rounded p-2" placeholder="0"></div>
                 </div>
             </div>
         </div>
 
         <div class="bg-white rounded-xl p-4 card-shadow border-l-4 border-secondary">
             <div class="flex justify-between items-center mb-3">
-                <h3 class="font-bold text-gray-700"><i class="fa fa-users text-secondary mr-2"></i> 出勤录入</h3>
-                <button type="button" id="addRowBtn" class="text-xs bg-secondary/10 text-secondary px-2 py-1 rounded font-medium active:bg-secondary/20">
-                    <i class="fa fa-plus"></i> 加一行
-                </button>
+                <h3 class="font-bold text-gray-700">出勤录入</h3>
+                <button id="addRowBtn" class="text-xs bg-green-50 text-green-600 px-2 py-1 rounded border border-green-200">+ 加一行</button>
             </div>
-            <div id="attendanceList" class="space-y-3"></div>
+            <div id="attendanceList" class="space-y-2"></div>
         </div>
-
     </main>
 
-    <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 px-4 shadow-lg z-50 backdrop-blur-md bg-opacity-95">
-        <div class="max-w-md mx-auto grid grid-cols-5 gap-2">
-            <button id="submitContinue" class="col-span-3 bg-secondary hover:bg-secondary/90 text-white rounded-lg py-3 font-bold shadow-lg shadow-secondary/30 active:transform active:scale-95 transition-all flex justify-center items-center">
-                <i class="fa fa-check-circle mr-2"></i> 提交并继续
-            </button>
-            <button id="submitClear" class="col-span-2 bg-gray-100 text-gray-600 rounded-lg py-3 font-medium active:bg-gray-200 text-sm flex flex-col justify-center items-center leading-none">
-                <span>提交并</span>
-                <span class="text-xs mt-1">清空任务</span>
-            </button>
+    <div class="fixed bottom-0 left-0 right-0 bg-white border-t p-3 px-4 shadow-lg z-50 space-y-3">
+        <button id="submitBtn" class="w-full bg-secondary text-white rounded-lg py-3 font-bold shadow-lg active:scale-95 transition-transform flex justify-center items-center">
+            <i class="fa fa-cloud-upload mr-2"></i> 提交保存
+        </button>
+        
+        <div id="adminPanel" class="hidden pt-2 border-t bg-gray-50 p-2 rounded">
+            <div class="flex gap-2 items-center">
+                <input type="password" id="adminPwd" placeholder="输入密码: 888" class="flex-1 border rounded px-2 py-1 text-sm">
+                <button id="exportExcelBtn" class="bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold whitespace-nowrap">
+                    <i class="fa fa-download"></i> 下载Excel
+                </button>
+            </div>
+            <p class="text-xs text-gray-400 mt-1 text-center">数据将从云端下载并自动转换为中文表头</p>
         </div>
     </div>
 
-    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full shadow-xl text-sm opacity-0 transition-opacity z-[100] pointer-events-none flex items-center hidden">
-        <i id="toastIcon" class="fa fa-info-circle mr-2"></i> <span id="toastMsg">消息提示</span>
+    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full shadow-xl hidden z-[100] text-sm flex items-center">
+        <i id="toastIcon" class="fa fa-info-circle mr-2"></i> <span id="toastMsg"></span>
     </div>
 
     <script>
-        // ================== 核心配置区 ==================
-        const CONFIG = {
-            // 你的 SeaTable API Token (已为你填好)
-            TOKEN: 'af509801d566b9921b8a4efb7becd9c0d971dc72', 
-            // 你的 表格标签名称 (已确认)
-            TABLE_NAME: '工作表1' 
-        };
-        // ==============================================
+        // =======================================================
+        // 🔴 核心配置区 (已根据你的密钥和表名 WorkLog 填好)
+        // =======================================================
+        const BMOB_SECRET_KEY = '7d60a28391f27608';     // 你的 Secret Key
+        const BMOB_API_KEY    = '1234567890123456';     // 你的 API 安全码
+        const TABLE_NAME      = 'WorkLog';              // 你的表名 (已更新为 WorkLog)
+        const EXPORT_PWD      = '888';                  // 管理员导出密码
+        
+        // 初始化 Bmob
+        Bmob.initialize(BMOB_SECRET_KEY, BMOB_API_KEY);
+        // =======================================================
 
-        // 初始化
         document.addEventListener('DOMContentLoaded', () => {
             initDate();
             loadCachedData();
-            addAttendanceRow(true);
+            addAttendanceRow(true); 
+            
+            // 按钮事件绑定
+            document.getElementById('addRowBtn').addEventListener('click', () => addAttendanceRow());
+            document.getElementById('submitBtn').addEventListener('click', handleSubmit);
+            document.getElementById('adminBtn').addEventListener('click', toggleAdmin);
+            document.getElementById('exportExcelBtn').addEventListener('click', handleExport);
         });
 
-        // 1. 日期初始化
+        // 1. 基础功能
         function initDate() {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('date').value = today;
+            document.getElementById('date').value = new Date().toISOString().split('T')[0];
         }
 
-        // 2. 缓存加载 (记忆班组信息)
         function loadCachedData() {
             document.querySelectorAll('.save-local').forEach(input => {
-                const key = 'PROD_SYS_' + (input.id || input.name);
-                const val = localStorage.getItem(key);
-                if (val) {
-                    if(input.type === 'radio') {
-                        if(input.value === val) input.checked = true;
-                    } else {
-                        input.value = val;
-                    }
-                }
-                input.addEventListener('change', (e) => {
-                    localStorage.setItem('PROD_SYS_' + (e.target.id || e.target.name), e.target.value);
-                });
+                const val = localStorage.getItem('PROD_' + (input.id || input.name));
+                if (val) input.type === 'radio' ? (input.value === val && (input.checked = true)) : input.value = val;
+                input.addEventListener('change', e => localStorage.setItem('PROD_' + (e.target.id || e.target.name), e.target.value));
             });
         }
-
-        // 3. 添加出勤行
-        const list = document.getElementById('attendanceList');
-        document.getElementById('addRowBtn').addEventListener('click', () => addAttendanceRow());
 
         function addAttendanceRow(isFirst = false) {
             const row = document.createElement('div');
-            row.className = 'grid grid-cols-7 gap-2 items-center animate-fadeIn';
+            row.className = 'flex gap-2 items-center animate-fadeIn';
             row.innerHTML = `
-                <div class="col-span-3">
-                    <input type="text" name="staffName" placeholder="姓名" class="w-full bg-gray-50 border border-gray-200 rounded px-2 py-2 text-sm focus:border-secondary focus:ring-1 focus:ring-secondary focus:outline-none">
-                </div>
-                <div class="col-span-3 relative">
-                    <input type="number" name="staffHours" placeholder="工时" step="0.5" class="w-full bg-gray-50 border border-gray-200 rounded px-2 py-2 text-sm focus:border-secondary focus:ring-1 focus:ring-secondary focus:outline-none">
-                </div>
-                <div class="col-span-1 text-center">
-                    ${!isFirst ? '<button type="button" onclick="this.parentElement.parentElement.remove()" class="text-gray-400 hover:text-danger p-2"><i class="fa fa-minus-circle text-lg"></i></button>' : '<i class="fa fa-user text-gray-300"></i>'}
-                </div>
+                <input type="text" name="staffName" placeholder="姓名" class="flex-1 border rounded p-2 text-sm bg-gray-50 focus:bg-white">
+                <input type="number" name="staffHours" placeholder="工时" class="w-20 border rounded p-2 text-sm bg-gray-50 focus:bg-white">
+                ${!isFirst ? '<button onclick="this.parentElement.remove()" class="text-red-400 p-2"><i class="fa fa-minus-circle"></i></button>' : '<div class="w-8"></div>'}
             `;
-            list.appendChild(row);
+            document.getElementById('attendanceList').appendChild(row);
         }
 
-        // 4. 核心提交逻辑 (修复版)
-        document.getElementById('submitContinue').addEventListener('click', () => handleSubmit(false));
-        document.getElementById('submitClear').addEventListener('click', () => handleSubmit(true));
-
-        // 动态获取 SeaTable 服务器地址 (解决 404 的关键)
-        async function getDtableInfo() {
-            const url = 'https://cloud.seatable.cn/api/v2.1/dtable/app-access-token/';
-            const res = await fetch(url, {
-                headers: { 'Authorization': 'Token ' + CONFIG.TOKEN }
-            });
+        // 2. 提交逻辑 (核心)
+        async function handleSubmit() {
+            const btn = document.getElementById('submitBtn');
+            const originalText = btn.innerHTML;
             
-            if (!res.ok) throw new Error('认证失败：无法连接 SeaTable，请检查 Token');
-            return await res.json();
-        }
-
-        async function handleSubmit(clearAll) {
-            const btn = clearAll ? document.getElementById('submitClear') : document.getElementById('submitContinue');
-            const originText = btn.innerHTML;
+            // 收集数据 (英文Key以匹配数据库)
+            const commonData = {
+                DataDate: { __type: 'Date', iso: new Date(document.getElementById('date').value).toISOString() },
+                zubie: document.getElementById('group').value,
+                team: document.getElementById('team').value,
+                shift: document.querySelector('input[name="shift"]:checked')?.value,
+                taskId: document.getElementById('taskId').value,
+                product: document.getElementById('product').value,
+                quantity: Number(document.getElementById('quantity').value),
+                unitBase: Number(document.getElementById('unitBase').value)
+            };
 
             // 校验
-            if(!validateForm()) return;
+            if (!commonData.zubie || !commonData.taskId || !commonData.product) return showToast('⚠️ 请完善必填信息 (组别/单号/品名)', true);
+            
+            // 准备批量保存的对象
+            const queryArray = [];
+            let hasStaff = false;
+            
+            document.querySelectorAll('#attendanceList > div').forEach(row => {
+                const name = row.querySelector('input[name="staffName"]').value.trim();
+                const hours = Number(row.querySelector('input[name="staffHours"]').value);
+                
+                if (name) {
+                    hasStaff = true;
+                    const query = Bmob.Query(TABLE_NAME);
+                    for (let key in commonData) query.set(key, commonData[key]); // 复制公共信息
+                    query.set('staffName', name); // 存入姓名
+                    query.set('staffHours', hours); // 存入工时
+                    queryArray.push(query);
+                }
+            });
 
-            // 锁定按钮
+            if (!hasStaff) return showToast('⚠️ 至少录入一个出勤人员', true);
+
+            // 开始提交
             btn.disabled = true;
-            btn.innerHTML = '<i class="fa fa-circle-o-notch spinner"></i> 连接中...';
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 云端保存中...';
 
             try {
-                // 第一步：获取动态服务器地址
-                const authData = await getDtableInfo();
-                const { dtable_uuid, dtable_server, access_token } = authData;
+                // 并发上传所有行
+                const promises = queryArray.map(q => q.save());
+                await Promise.all(promises);
 
-                btn.innerHTML = '<i class="fa fa-upload"></i> 上传中...';
-
-                // 第二步：收集数据
-                const commonData = {
-                    '日期': document.getElementById('date').value,
-                    '组别': document.getElementById('group').value,
-                    '小组': document.getElementById('team').value,
-                    '班次': document.querySelector('input[name="shift"]:checked')?.value,
-                    '任务单号': document.getElementById('taskId').value.toUpperCase(),
-                    '品名': document.getElementById('product').value,
-                    '数量': Number(document.getElementById('quantity').value) || 0,
-                    '单基数': Number(document.getElementById('unitBase').value) || 0
-                };
-
-                const rows = [];
-                document.querySelectorAll('#attendanceList > div').forEach(row => {
-                    const name = row.querySelector('input[name="staffName"]').value.trim();
-                    const hours = Number(row.querySelector('input[name="staffHours"]').value);
-                    if (name) {
-                        rows.push({
-                            ...commonData,
-                            '出勤人员': name,
-                            '出勤工时': hours
-                        });
-                    }
-                });
-
-                if (rows.length === 0) throw new Error('请至少录入一个有效出勤人员');
-
-                // 第三步：使用动态地址提交
-                // 注意：这里使用的是 dtable_server 而不是 cloud.seatable.cn
-                const submitUrl = `${dtable_server}/api/v1/dtables/${dtable_uuid}/batch-append-rows/`;
+                showToast('✅ 提交成功！数据已存入云端');
                 
-                const res = await fetch(submitUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Token ' + access_token, // 使用临时 Token
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        table_name: CONFIG.TABLE_NAME,
-                        rows: rows
-                    })
-                });
+                // 清空部分数据
+                document.getElementById('taskId').value = '';
+                document.getElementById('product').value = '';
+                document.getElementById('quantity').value = '';
+                // 重置人员列表
+                document.querySelectorAll('input[name="staffName"], input[name="staffHours"]').forEach(i => i.value = '');
+                const list = document.getElementById('attendanceList');
+                while(list.children.length > 1) list.removeChild(list.lastChild);
 
-                if (res.ok) {
-                    showToast(`✅ 提交成功！已保存 ${rows.length} 条记录`);
-                    
-                    // 成功后重置
-                    document.querySelectorAll('input[name="staffName"], input[name="staffHours"]').forEach(input => input.value = '');
-                    const list = document.getElementById('attendanceList');
-                    while(list.children.length > 1) list.removeChild(list.lastChild);
-
-                    if (clearAll) {
-                        document.getElementById('taskId').value = '';
-                        document.getElementById('product').value = '';
-                        document.getElementById('quantity').value = '';
-                        document.getElementById('unitBase').value = '';
-                        window.scrollTo(0, 0);
-                    }
-                } else {
-                    const err = await res.json();
-                    throw new Error(err.error_msg || '服务器拒绝写入');
-                }
-
-            } catch (error) {
-                console.error(error);
-                alert('提交失败: ' + error.message);
+            } catch (e) {
+                console.error(e);
+                alert('提交出错: ' + (e.error || JSON.stringify(e)));
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = originText;
+                btn.innerHTML = originalText;
             }
         }
 
-        function validateForm() {
-            const ids = ['date', 'group', 'team', 'taskId', 'product'];
-            for (let id of ids) {
-                if (!document.getElementById(id).value) {
-                    showToast('⚠️ 请填写所有必填项 *', true);
-                    return false;
-                }
-            }
-            if (!document.querySelector('input[name="shift"]:checked')) {
-                showToast('⚠️ 请选择班次', true);
-                return false;
-            }
-            return true;
+        // 3. 导出逻辑 (带中文转换)
+        function toggleAdmin() {
+            const panel = document.getElementById('adminPanel');
+            panel.classList.toggle('hidden');
+            if(!panel.classList.contains('hidden')) window.scrollTo(0, document.body.scrollHeight);
         }
 
+        async function handleExport() {
+            const pwd = document.getElementById('adminPwd').value;
+            if (pwd !== EXPORT_PWD) return showToast('❌ 密码错误 (默认888)', true);
+
+            const btn = document.getElementById('exportExcelBtn');
+            const oldText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '下载中...';
+
+            try {
+                // 拉取最近 1000 条数据
+                const query = Bmob.Query(TABLE_NAME);
+                query.limit(1000);
+                query.order("-createdAt");
+                const results = await query.find();
+
+                if (!results || results.length === 0) throw new Error("云端没有数据可导出");
+
+                // 转换数据格式 (英文Key -> 中文Key)
+                const excelData = results.map(item => ({
+                    "提交时间": item.createdAt,
+                    "日期": item.DataDate ? item.DataDate.iso.substring(0, 10) : '',
+                    "组别": item.zubie,
+                    "小组": item.team,
+                    "班次": item.shift,
+                    "任务单号": item.taskId,
+                    "品名": item.product,
+                    "数量": item.quantity,
+                    "单基数": item.unitBase,
+                    "出勤人员": item.staffName,
+                    "工时": item.staffHours
+                }));
+
+                // 生成 Excel
+                const ws = XLSX.utils.json_to_sheet(excelData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "报工记录");
+                
+                const fileName = `生产报工_${new Date().toISOString().slice(0,10)}.xlsx`;
+                XLSX.writeFile(wb, fileName);
+                
+                showToast('✅ Excel 已下载');
+
+            } catch (e) {
+                alert('导出失败: ' + (e.error || e.message));
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = oldText;
+            }
+        }
+
+        // 提示工具
         function showToast(msg, isError = false) {
-            const toast = document.getElementById('toast');
+            const t = document.getElementById('toast');
+            const i = document.getElementById('toastIcon');
             document.getElementById('toastMsg').innerText = msg;
-            const icon = document.getElementById('toastIcon');
             
             if(isError) {
-                toast.classList.remove('bg-gray-800'); toast.classList.add('bg-danger');
-                icon.className = 'fa fa-times-circle mr-2';
+                t.classList.remove('bg-gray-800'); t.classList.add('bg-danger');
+                i.className = 'fa fa-times-circle mr-2';
             } else {
-                toast.classList.remove('bg-danger'); toast.classList.add('bg-gray-800');
-                icon.className = 'fa fa-info-circle mr-2';
+                t.classList.remove('bg-danger'); t.classList.add('bg-gray-800');
+                i.className = 'fa fa-check-circle mr-2';
             }
             
-            toast.classList.remove('hidden');
-            setTimeout(() => toast.classList.add('hidden'), 2000);
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('hidden'), 3000);
         }
     </script>
 </body>
