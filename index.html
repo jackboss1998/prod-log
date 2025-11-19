@@ -251,19 +251,12 @@
 
         // 发送 API
         try {
-            const url = `${CONFIG.server}/dtable-server/api/v1/dtables/${CONFIG.dtable_uuid}/batch-append-rows/`;
-            const resp = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Authorization': 'Token ' + CONFIG.token,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    table_name: CONFIG.table_name,
-                    rows: rows
-                })
-            });
+            const url = `${CONFIG.server}/api/v2.1/dtables/${CONFIG.dtable_uuid}/batch-append-rows/`;
+            const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Authorization': 'Token ' + CONFIG.token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ table_name: CONFIG.table_name, rows: rows })
+        });
 
             if(resp.ok) {
                 showToast('✅ 提交成功！已保存 ' + rows.length + ' 条记录');
@@ -326,3 +319,4 @@
 </body>
 
 </html>
+
