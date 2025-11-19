@@ -258,7 +258,7 @@
             body: JSON.stringify({ table_name: CONFIG.table_name, rows: rows })
         });
 
-            if(resp.ok) {
+            if(res.ok) {
                 showToast('✅ 提交成功！已保存 ' + rows.length + ' 条记录');
                 // 成功后的处理
                 document.querySelectorAll('input[name="staffName"], input[name="staffHours"]').forEach(input => input.value = ''); // 清空人员行
@@ -274,7 +274,7 @@
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
             } else {
-                const err = await resp.json();
+                const err = await res.json();
                 throw new Error(err.error_msg || '服务器错误');
             }
         } catch (e) {
@@ -319,4 +319,5 @@
 </body>
 
 </html>
+
 
