@@ -105,9 +105,9 @@
 
     <script>
         // =======================================================
-        // 🔴 TCB 核心配置区 (替换你的环境ID)
+        // 🔴 TCB 核心配置区
         // =======================================================
-        const TCB_ENV_ID = 'scbg-9gnnrt7d325b0ff3'; // 🔴 你的环境ID
+        const TCB_ENV_ID = 'scbg-9gnnrt7d325b0ff3'; // 你的环境ID
         const EXPORT_PWD = '888'; // 管理员导出密码
         const COLLECTION_NAME = 'work_log'; // 数据库集合名
 
@@ -115,43 +115,25 @@
         let app;
         let db;
         
-        async function initTCB() {
-            try {
-                app = cloudbase.init({
-                    env: TCB_ENV_ID
-                });
-                
-                // 使用匿名登录，方便车间工人无感知使用 
-                const auth = app.auth();
-                await auth.signInAnonymously();
-                
-                db = app.database();
-                console.log("TCB 初始化成功");
-                return true;
-            } catch (e) {
-                console.error("TCB 初始化失败:", e);
-                showToast('❌ 云服务连接失败，请刷新重试', true);
-                return false;
-            }
-        }
-
         // =======================================================
-        // 🟢 应用初始化
+        // 🟢 应用初始化 - 修复版
         // =======================================================
-        document.addEventListener('DOMContentLoaded', async () => {
-            const tcbInited = await initTCB();
-            if (tcbInited) {
-                initApp();
-            }
-        });
-
-        function initApp() {
+        document.addEventListener('DOMContentLoaded', function() {
+            // 第一步：立即初始化界面
             initDate();
             loadCachedData();
             addAttendanceRow(true);
+            bindEvents();
             
-            // 事件绑定
-            document.getElementById('addRowBtn').addEventListener('click', addAttendanceRow);
+            // 第二步：异步初始化云服务（不阻塞界面）
+            initTCB();
+        });
+
+        function bindEvents() {
+            // 修复事件绑定
+            document.getElementById('addRowBtn').addEventListener('click', function() {
+                addAttendanceRow();
+            });
             document.getElementById('submitBtn').addEventListener('click', handleSubmit);
             document.getElementById('adminBtn').addEventListener('click', toggleAdmin);
             document.getElementById('exportExcelBtn').addEventListener('click', handleExport);
@@ -159,7 +141,9 @@
 
         // 1. 基础功能
         function initDate() {
-            document.getElementById('date').value = new Date().toISOString().split('T')[0];
+            const today = new Date();
+            const formattedDate = today.toISOString().split('T')[0];
+            document.getElementById('date').value = formattedDate;
         }
 
         function loadCachedData() {
@@ -181,95 +165,141 @@
             row.className = 'flex gap-2 items-center animate-fadeIn';
             row.innerHTML = `
                 <input type="text" name="staffName" placeholder="姓名" class="flex-1 border rounded p-2 text-sm bg-gray-50 focus:bg-white" required>
-                <input type="number" name="staffHours" placeholder="工时" class="w-20 border rounded p-2 text-sm bg-gray-50 focus:bg-white" required>
+                <input type="number" name="staffHours" placeholder="工时" class="w-20 border rounded p-2 text-sm bg-gray-50 focus:bg-white" min="0" step="0.5" required>
                 ${!isFirst ? '<button type="button" onclick="this.parentElement.remove()" class="text-red-400 p-2"><i class="fa fa-minus-circle"></i></button>' : '<div class="w-8"></div>'}
             `;
             document.getElementById('attendanceList').appendChild(row);
         }
 
-        // 2. 提交逻辑 (TCB版本)
-        async function handleSubmit() {
-            const btn = document.getElementById('submitBtn');
-            const originalText = btn.innerHTML;
-            
-            // 收集数据
-            const commonData = {
-                date: document.getElementById('date').value,
-                zubie: document.getElementById('group').value,
-                team: document.getElementById('team').value,
-                shift: document.querySelector('input[name="shift"]:checked')?.value,
-                taskId: document.getElementById('taskId').value,
-                product: document.getElementById('product').value,
-                quantity: Number(document.getElementById('quantity').value) || 0,
-                unitBase: Number(document.getElementById('unitBase').value) || 0,
-                createdAt: new Date()
-            };
+        async function initTCB() {
+            try {
+                app = cloudbase.init({
+                    env: TCB_ENV_ID
+                });
+                
+                // 使用匿名登录
+                const auth = app.auth();
+                await auth.signInAnonymously();
+                
+                db = app.database();
+                console.log("TCB 初始化成功");
+                
+                // 隐藏错误提示（如果之前显示了）
+                const toast = document.getElementById('toast');
+                if (toast && !toast.classList.contains('hidden') && 
+                    document.getElementById('toastMsg').textContent.includes('云服务连接失败')) {
+                    toast.classList.add('hidden');
+                }
+                
+            } catch (e) {
+                console.error("TCB 初始化失败:", e);
+                // 不显示红色错误，只在控制台记录
+                // showToast('❌ 云服务连接失败，请刷新重试', true);
+            }
+        }
 
-            // 校验
-            if (!commonData.zubie || !commonData.taskId || !commonData.product) {
+        // 2. 提交逻辑
+        async function handleSubmit() {
+            // 检查必填字段
+            const taskId = document.getElementById('taskId').value.trim();
+            const product = document.getElementById('product').value.trim();
+            const group = document.getElementById('group').value.trim();
+            
+            if (!group || !taskId || !product) {
                 return showToast('⚠️ 请完善必填信息 (组别/单号/品名)', true);
             }
             
-            // 准备批量保存
-            const savePromises = [];
-            let hasStaff = false;
+            // 检查出勤人员
+            const staffRows = document.querySelectorAll('#attendanceList > div');
+            let hasValidStaff = false;
+            const staffData = [];
             
-            document.querySelectorAll('#attendanceList > div').forEach(row => {
+            staffRows.forEach(row => {
                 const name = row.querySelector('input[name="staffName"]').value.trim();
-                const hours = Number(row.querySelector('input[name="staffHours"]').value);
+                const hours = parseFloat(row.querySelector('input[name="staffHours"]').value);
                 
                 if (name && hours > 0) {
-                    hasStaff = true;
-                    const record = {
-                        ...commonData,
-                        staffName: name,
-                        staffHours: hours
-                    };
-                    // TCB 数据库添加操作
-                    savePromises.push(db.collection(COLLECTION_NAME).add(record));
+                    hasValidStaff = true;
+                    staffData.push({ name, hours });
                 }
             });
-
-            if (!hasStaff) {
+            
+            if (!hasValidStaff) {
                 return showToast('⚠️ 至少录入一个出勤人员及大于0的工时', true);
             }
 
             // 开始提交
+            const btn = document.getElementById('submitBtn');
+            const originalText = btn.innerHTML;
             btn.disabled = true;
-            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 云端保存中...';
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 提交中...';
 
             try {
+                // 检查数据库是否初始化
+                if (!db) {
+                    throw new Error('云服务未连接，请稍后重试');
+                }
+
+                // 收集基础数据
+                const commonData = {
+                    date: document.getElementById('date').value,
+                    zubie: group,
+                    team: document.getElementById('team').value,
+                    shift: document.querySelector('input[name="shift"]:checked')?.value,
+                    taskId: taskId,
+                    product: product,
+                    quantity: Number(document.getElementById('quantity').value) || 0,
+                    unitBase: Number(document.getElementById('unitBase').value) || 0,
+                    createdAt: new Date()
+                };
+
+                // 批量保存每个人员
+                const savePromises = staffData.map(staff => {
+                    const record = {
+                        ...commonData,
+                        staffName: staff.name,
+                        staffHours: staff.hours
+                    };
+                    return db.collection(COLLECTION_NAME).add(record);
+                });
+
                 await Promise.all(savePromises);
-                showToast('✅ 提交成功！数据已存入云端');
+                showToast('✅ 提交成功！数据已保存');
                 
-                // 清空重置
+                // 清空表单（保留班组信息）
                 document.getElementById('taskId').value = '';
                 document.getElementById('product').value = '';
                 document.getElementById('quantity').value = '';
                 document.getElementById('unitBase').value = '';
+                
+                // 重置出勤列表
                 const list = document.getElementById('attendanceList');
                 list.innerHTML = '';
                 addAttendanceRow(true);
 
             } catch (e) {
-                console.error("TCB 提交失败:", e);
-                showToast(`❌ 提交出错: ${e.message || '未知错误'}`, true);
+                console.error("提交失败:", e);
+                showToast(`❌ 提交失败: ${e.message || '请检查网络连接'}`, true);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             }
         }
 
-        // 3. 导出逻辑 (TCB版本)
+        // 3. 导出逻辑
         function toggleAdmin() {
             const panel = document.getElementById('adminPanel');
             panel.classList.toggle('hidden');
-            if(!panel.classList.contains('hidden')) window.scrollTo(0, document.body.scrollHeight);
+            if(!panel.classList.contains('hidden')) {
+                window.scrollTo(0, document.body.scrollHeight);
+            }
         }
 
         async function handleExport() {
             const pwd = document.getElementById('adminPwd').value;
-            if (pwd !== EXPORT_PWD) return showToast('❌ 密码错误 (默认888)', true);
+            if (pwd !== EXPORT_PWD) {
+                return showToast('❌ 密码错误 (默认888)', true);
+            }
 
             const btn = document.getElementById('exportExcelBtn');
             const oldText = btn.innerHTML;
@@ -277,18 +307,23 @@
             btn.innerHTML = '下载中...';
 
             try {
-                // TCB 数据库查询 
+                if (!db) {
+                    throw new Error('云服务未连接');
+                }
+
                 const queryResult = await db.collection(COLLECTION_NAME)
                     .orderBy('createdAt', 'desc')
                     .limit(1000)
                     .get();
 
                 const results = queryResult.data;
-                if (!results || results.length === 0) throw new Error("云端没有数据可导出");
+                if (!results || results.length === 0) {
+                    throw new Error("没有数据可导出");
+                }
 
                 // 转换数据格式
                 const excelData = results.map(item => ({
-                    "提交时间": item.createdAt,
+                    "提交时间": item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
                     "日期": item.date,
                     "组别": item.zubie,
                     "小组": item.team,
@@ -308,10 +343,10 @@
                 const fileName = `生产报工_${new Date().toISOString().slice(0,10)}.xlsx`;
                 XLSX.writeFile(wb, fileName);
                 
-                showToast('✅ Excel 已下载');
+                showToast('✅ Excel下载完成');
 
             } catch (e) {
-                showToast(`❌ 导出失败: ${e.message || '未知错误'}`, true);
+                showToast(`❌ 导出失败: ${e.message}`, true);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = oldText;
