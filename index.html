@@ -6,8 +6,8 @@
     <title>生产报工登记</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <!-- 引入腾讯云开发 SDK -->
-    <script src="https://static.cloudbase.net/cloudbase-js-sdk/2.17.3/cloudbase.full.js"></script>
+    <!-- 引入 LeanCloud SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.13.2/dist/av-min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
     
     <script>
@@ -105,32 +105,32 @@
 
     <script>
         // =======================================================
-        // 🔴 TCB 核心配置区
+        // 🔴 LeanCloud 核心配置 - 已配置您的信息
         // =======================================================
-        const TCB_ENV_ID = 'scbg-9gnnrt7d325b0ff3'; // 你的环境ID
-        const EXPORT_PWD = '888'; // 管理员导出密码
-        const COLLECTION_NAME = 'work_log'; // 数据库集合名
+        const LEANCLOUD_APP_ID = 'Jy6DXKgEGa0r1mZe1PtdmowS-gzGzoHsz';
+        const LEANCLOUD_APP_KEY = 'orwbpOeN25iEa8MdaUxFRAFb';
+        const LEANCLOUD_SERVER_URL = 'https://jy6dxkge.lc-cn-n1-shared.com';
+        const EXPORT_PWD = '888';
 
-        // 初始化 TCB
-        let app;
-        let db;
-        
+        // 初始化 LeanCloud
+        AV.init({
+            appId: LEANCLOUD_APP_ID,
+            appKey: LEANCLOUD_APP_KEY,
+            serverURL: LEANCLOUD_SERVER_URL
+        });
+
         // =======================================================
-        // 🟢 应用初始化 - 修复版
+        // 🟢 应用初始化
         // =======================================================
         document.addEventListener('DOMContentLoaded', function() {
-            // 第一步：立即初始化界面
             initDate();
             loadCachedData();
             addAttendanceRow(true);
             bindEvents();
-            
-            // 第二步：异步初始化云服务（不阻塞界面）
-            initTCB();
+            console.log("生产报工系统初始化完成");
         });
 
         function bindEvents() {
-            // 修复事件绑定
             document.getElementById('addRowBtn').addEventListener('click', function() {
                 addAttendanceRow();
             });
@@ -171,36 +171,8 @@
             document.getElementById('attendanceList').appendChild(row);
         }
 
-        async function initTCB() {
-            try {
-                app = cloudbase.init({
-                    env: TCB_ENV_ID
-                });
-                
-                // 使用匿名登录
-                const auth = app.auth();
-                await auth.signInAnonymously();
-                
-                db = app.database();
-                console.log("TCB 初始化成功");
-                
-                // 隐藏错误提示（如果之前显示了）
-                const toast = document.getElementById('toast');
-                if (toast && !toast.classList.contains('hidden') && 
-                    document.getElementById('toastMsg').textContent.includes('云服务连接失败')) {
-                    toast.classList.add('hidden');
-                }
-                
-            } catch (e) {
-                console.error("TCB 初始化失败:", e);
-                // 不显示红色错误，只在控制台记录
-                // showToast('❌ 云服务连接失败，请刷新重试', true);
-            }
-        }
-
-        // 2. 提交逻辑
+        // 2. 提交逻辑 - LeanCloud版本
         async function handleSubmit() {
-            // 检查必填字段
             const taskId = document.getElementById('taskId').value.trim();
             const product = document.getElementById('product').value.trim();
             const group = document.getElementById('group').value.trim();
@@ -209,7 +181,6 @@
                 return showToast('⚠️ 请完善必填信息 (组别/单号/品名)', true);
             }
             
-            // 检查出勤人员
             const staffRows = document.querySelectorAll('#attendanceList > div');
             let hasValidStaff = false;
             const staffData = [];
@@ -228,19 +199,12 @@
                 return showToast('⚠️ 至少录入一个出勤人员及大于0的工时', true);
             }
 
-            // 开始提交
             const btn = document.getElementById('submitBtn');
             const originalText = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 提交中...';
 
             try {
-                // 检查数据库是否初始化
-                if (!db) {
-                    throw new Error('云服务未连接，请稍后重试');
-                }
-
-                // 收集基础数据
                 const commonData = {
                     date: document.getElementById('date').value,
                     zubie: group,
@@ -249,30 +213,38 @@
                     taskId: taskId,
                     product: product,
                     quantity: Number(document.getElementById('quantity').value) || 0,
-                    unitBase: Number(document.getElementById('unitBase').value) || 0,
-                    createdAt: new Date()
+                    unitBase: Number(document.getElementById('unitBase').value) || 0
                 };
 
-                // 批量保存每个人员
+                // LeanCloud 批量保存
                 const savePromises = staffData.map(staff => {
-                    const record = {
-                        ...commonData,
-                        staffName: staff.name,
-                        staffHours: staff.hours
-                    };
-                    return db.collection(COLLECTION_NAME).add(record);
+                    const WorkLog = AV.Object.extend('WorkLog');
+                    const log = new WorkLog();
+                    
+                    // 设置字段
+                    log.set('date', commonData.date);
+                    log.set('zubie', commonData.zubie);
+                    log.set('team', commonData.team);
+                    log.set('shift', commonData.shift);
+                    log.set('taskId', commonData.taskId);
+                    log.set('product', commonData.product);
+                    log.set('quantity', commonData.quantity);
+                    log.set('unitBase', commonData.unitBase);
+                    log.set('staffName', staff.name);
+                    log.set('staffHours', staff.hours);
+                    
+                    return log.save();
                 });
 
                 await Promise.all(savePromises);
                 showToast('✅ 提交成功！数据已保存');
                 
-                // 清空表单（保留班组信息）
+                // 清空表单
                 document.getElementById('taskId').value = '';
                 document.getElementById('product').value = '';
                 document.getElementById('quantity').value = '';
                 document.getElementById('unitBase').value = '';
                 
-                // 重置出勤列表
                 const list = document.getElementById('attendanceList');
                 list.innerHTML = '';
                 addAttendanceRow(true);
@@ -286,7 +258,7 @@
             }
         }
 
-        // 3. 导出逻辑
+        // 3. 导出逻辑 - LeanCloud版本
         function toggleAdmin() {
             const panel = document.getElementById('adminPanel');
             panel.classList.toggle('hidden');
@@ -307,33 +279,28 @@
             btn.innerHTML = '下载中...';
 
             try {
-                if (!db) {
-                    throw new Error('云服务未连接');
-                }
+                const query = new AV.Query('WorkLog');
+                query.descending('createdAt');
+                query.limit(1000);
+                const results = await query.find();
 
-                const queryResult = await db.collection(COLLECTION_NAME)
-                    .orderBy('createdAt', 'desc')
-                    .limit(1000)
-                    .get();
-
-                const results = queryResult.data;
                 if (!results || results.length === 0) {
                     throw new Error("没有数据可导出");
                 }
 
                 // 转换数据格式
                 const excelData = results.map(item => ({
-                    "提交时间": item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
-                    "日期": item.date,
-                    "组别": item.zubie,
-                    "小组": item.team,
-                    "班次": item.shift,
-                    "任务单号": item.taskId,
-                    "品名": item.product,
-                    "数量": item.quantity,
-                    "单基数": item.unitBase,
-                    "出勤人员": item.staffName,
-                    "工时": item.staffHours
+                    "提交时间": item.createdAt.toLocaleString(),
+                    "日期": item.get('date'),
+                    "组别": item.get('zubie'),
+                    "小组": item.get('team'),
+                    "班次": item.get('shift'),
+                    "任务单号": item.get('taskId'),
+                    "品名": item.get('product'),
+                    "数量": item.get('quantity'),
+                    "单基数": item.get('unitBase'),
+                    "出勤人员": item.get('staffName'),
+                    "工时": item.get('staffHours')
                 }));
 
                 const ws = XLSX.utils.json_to_sheet(excelData);
